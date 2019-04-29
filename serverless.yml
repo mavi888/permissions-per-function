@@ -1,33 +1,15 @@
-service: serverless-dynamo-basic-operations
+service: permissions-per-function
 
 plugins:
-  - serverless-dynamodb-local
+  - serverless-iam-roles-per-function
 
 custom:
-  myStage: ${opt:stage, self:provider.stage}
-  settings:
-    dev:
-      ITEMS_DYNAMODB_TABLE: sls-basic-operations-items-dev
-    prod:
-      ITEMS_DYNAMODB_TABLE: sls-basic-operations-items-prod
+  ITEMS_DYNAMODB_TABLE: sls-basic-operations-items
 
 provider:
   name: aws
-  runtime: nodejs6.10
-  profile: default
-  region: eu-west-1
-  environment: ${self:custom.settings.${self:custom.myStage}}
-
-  iamRoleStatements:
-    - Effect: "Allow"
-      Action:
-        - "dynamodb:GetItem"
-        - "dynamodb:PutItem"
-        - "dynamodb:UpdateItem"
-        - "dynamodb:DeleteItem"
-        - "dynamodb:ListStreams"
-      Resource:
-        - "arn:aws:dynamodb:${self:provider.region}:*:table/${self:custom.settings.${self:custom.myStage}.ITEMS_DYNAMODB_TABLE}"
+  runtime: nodejs8.10
+  environment: ${self:custom}
 
 functions:
   saveItem:
@@ -36,12 +18,28 @@ functions:
       - http:
           path: item
           method: post
+    iamRoleStatements:
+      - Effect: "Allow"        
+        Action:
+          - dynamodb:PutItem        
+        Resource:
+          Fn::GetAtt:
+            - ImagesTable
+            - Arn
   getItem:
     handler: handler.getItem
     events:
       - http:
           path: item/{itemId}
           method: get
+    iamRoleStatements:
+      - Effect: "Allow"        
+        Action:
+          - dynamodb:GetItem        
+        Resource:
+          Fn::GetAtt:
+            - ImagesTable
+            - Arn
   deleteItem:
     handler: handler.deleteItem
     events:
@@ -54,17 +52,6 @@ functions:
       - http:
           path: item/{itemId}
           method: put
-  triggerStream:
-    handler: handler.triggerStream
-    events:
-       - stream:
-          type: dynamodb
-          batchSize: 1
-          startingPosition: LATEST
-          arn:
-            Fn::GetAtt:
-              - ImagesTable
-              - StreamArn
 
 resources:
   Resources:
@@ -80,6 +67,4 @@ resources:
         ProvisionedThroughput:
           ReadCapacityUnits: 1
           WriteCapacityUnits: 1
-        TableName: ${self:custom.settings.${self:custom.myStage}.ITEMS_DYNAMODB_TABLE}
-        StreamSpecification:
-          StreamViewType: NEW_IMAGE
+        TableName: ${self:custom.ITEMS_DYNAMODB_TABLE}
